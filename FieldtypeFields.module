@@ -1,0 +1,366 @@
+<?php namespace ProcessWire;
+
+/**
+ * ProcessWire Select Fields Fieldtype
+ *
+ * Copyright 2016 by Martijn Geerts
+ *
+ * ProcessWire 2.x
+ * Copyright (C) 2014 by Ryan Cramer
+ * Licensed under GNU/GPL v2, see LICENSE.TXT
+ *
+ * http://processwire.com
+ *
+ */
+class FieldtypeFields extends FieldtypeMulti implements Module {
+
+	/**
+	 * Return array of module information
+	 *
+	 * @return array
+	 *
+	 */
+	public static function getModuleInfo() {
+		return array(
+			'title' => __('Select Fields', __FILE__),
+			'summary' => __('Field storing field references.', __FILE__),
+			'version' => 1,
+			'author' => 'Martijn Geerts (calago)',
+			'icon' => 'cube',
+			'requiresVersions' => array(
+				'ProcessWire' => array('>=', '3.0.39'),
+				),
+			);
+	}
+
+	/**
+	 * Set defaults
+	 *
+	 */
+	public function __construct() {
+		$this->set('inputfieldClass', 'InputfieldSelect');
+	}
+
+	/**
+	 * Is the Inputfield a single select?
+	 *
+	 * @param Field $field
+	 * @return boolean
+	 *
+	 */
+	protected function isSingle(Field $field) {
+		$selects = $this->getInputfieldSelects();
+		$className = $this->getInputfieldClass($field);
+
+		return $selects[$className]['single'];
+	}
+
+	/**
+	 * Return class name of the used inputfield type
+	 *
+	 * @param Field $field
+	 * @return string
+	 *
+	 */
+	protected function getInputfieldClass(Field $field) {
+		return  $field->inputfieldClass ? $field->inputfieldClass : $this->inputfieldClass;
+	}
+
+	/**
+	 * Get Fieldtypes that are known compatible with this one.
+	 *
+	 * @param Field $field
+	 * @return Fieldtypes
+	 * @throws WireException
+	 *
+	 */
+	public function ___getCompatibleFieldtypes(Field $field) {
+		$fieldtypes = $this->wire(new Fieldtypes());
+		foreach($this->wire('fieldtypes') as $fieldtype) {
+			if($fieldtype instanceof FieldtypeFields) $fieldtypes->add($fieldtype);
+		}
+
+		return $fieldtypes;
+	}
+
+	/**
+	 * Get a blank array
+	 *
+	 * @param Page $page
+	 * @param Field $field
+	 * @return array
+	 *
+	 */
+	public function getBlankValue(Page $page, Field $field) {
+		return array();
+	}
+
+	/**
+	 * Sanitize value for storage in a page
+	 *
+	 * @param Page $page
+	 * @param Field $field
+	 * @param mixed $value
+	 * @return array
+	 *
+	 */
+	public function sanitizeValue(Page $page, Field $field, $value) {
+		$cleanValue = $this->getBlankValue($page, $field);
+
+		if ($value instanceof FieldsArray) {
+			$value = $value->explode('id');
+		}
+
+		$value = (array) $value;
+
+		// Return blank value
+		if (!$value || empty($value)) return $cleanValue;
+
+		$value = array_map('intval', $value);
+
+		foreach ($value as $key => $id) {
+			if (!$id) continue;
+			$item = $this->wire('fields')->get($id);
+			if ($item && $item instanceof Field) {
+				$cleanValue[] = $id;
+				// Only allow first found field id when Inputfield is single
+				if ($this->isSingle($field)) break;
+			}
+		}
+
+		return $cleanValue;
+	}
+
+
+	/**
+	 * Get the Inputfield that provides input for this Fieldtype
+	 *
+	 * @param Page $page
+	 * @param Field $field
+	 * @return FieldsArray
+	 *
+	 */
+	private function getFields(Page $page, Field $field) {
+
+		$fields = $this->wire(new FieldsArray());
+		if ($field->filterPage) $fieldsFromPage = $page->template->fields;
+
+		// Get per selected template
+		if (count($field->filterTemplates)) {
+			foreach ($field->filterTemplates as $id) {
+				$fields->import($this->wire('templates')->get($id)->fields);
+			}
+		}
+
+		if (0 === $fields->count()) {
+			$fields = $this->wire('fields')->getAll();
+		}
+
+		foreach ($fields as $f) {
+			// Reduce on type
+			if (count($field->filterTypes) && !in_array($f->type->className(), $field->filterTypes)) {
+				$fields->remove($f->id);
+			}
+
+			// Remove fieldsets
+			if ($field->filterFieldsets && $f->type instanceof FieldtypeFieldsetOpen) {
+				$fields->remove($f->id);
+			}
+
+			// Reduce from page
+			if ($field->filterPage && !$fieldsFromPage->has($f)) {
+				$fields->remove($f->id);
+			}
+
+			if ($field->filterText) {
+				$words = array_map('trim', explode(PHP_EOL, $field->filterText));
+				$remove = true;
+
+				foreach($words as $word) {
+					if (strpos($f->name, $word) !== false) {
+						$remove = false;
+						break;
+					}
+				}
+
+				if ($remove) $fields->remove($f->id);
+			}
+
+			if ($field->filterFields && count($field->filterFields)) {
+				if (!in_array($f->id, $field->filterFields)) {
+					$fields->remove($f->id);
+				}
+			}
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * Get the Inputfield that provides input for this Fieldtype
+	 *
+	 * @param Page $page
+	 * @param Field $field
+	 * @return Inputfield
+	 *
+	 */
+	public function getInputfield(Page $page, Field $field) {
+		// Filtered fields
+		$fields = $this->getFields($page, $field);
+
+		$inputfield = $this->wire('modules')->get($this->getInputfieldClass($field));
+		$inputfield->attr('name', $field->name);
+		foreach($fields as $option) {
+			$inputfield->addOption($option->id, $option->get('label|name'));
+		}
+
+		return $inputfield;
+	}
+
+	/**
+	 * Get the Inputfield that provides input for this Fieldtype
+	 *
+	 * @return array
+	 *
+	 */
+	public function getInputfieldSelects() {
+		$array = array();
+		$modules = $this->wire('modules');
+
+		foreach($modules as $module) {
+			if(strpos($module->className(), 'Inputfield') !== 0) continue;
+			if($module instanceof ModulePlaceholder) $module = $modules->getModule($module->className(), array('noInit' => true));
+			if($module instanceof InputfieldSelect) {
+				$name = str_replace('Inputfield', '', $module->className());
+				$label = $name;
+				if($module instanceof InputfieldSelectMultiple) $label .= " *";
+				$array[$module->className()] = array(
+					'label' => $label,
+					'single' => $label === $name,
+					);
+			}
+		}
+
+		return $array;
+	}
+
+	/**
+	 * Get regular array with Fieldtypes
+	 *
+	 * @return array
+	 *
+	 */
+	private function getFieldTypes() {
+		$types = array();
+		foreach($this->wire('modules') as $module) {
+			if(strpos($module->className(), 'Fieldtype') === 0) {
+				// if($module instanceof ModulePlaceholder) $module = $this->wire('modules')->get($module->className());
+				$types[] = $module->className();
+			}
+		}
+
+		return $types;
+	}
+
+	/**
+	 * Return the selected fields in a FieldsArray
+	 *
+	 * @param Page $page
+	 * @param Field $field
+	 * @param array $value
+	 * @return FieldsArray
+	 *
+	 */
+	public function ___formatValue(Page $page, Field $field, $value) {
+		$fields = $this->wire(new FieldsArray());
+		foreach ($value as $id) {
+			$fields->add($this->wire('fields')->get($id));
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * Get Inputfields needed to configure this Fieldtype
+	 *
+	 * @param Field $field
+	 * @return InputfieldWrapper
+	 *
+	 */
+	public function ___getConfigInputfields(Field $field) {
+
+		$modules = $this->wire('modules');
+		$inputfields = parent::___getConfigInputfields($field);
+		$selects = $this->getInputfieldSelects();
+
+		$f = $modules->get('InputfieldSelect');
+		$f->attr('name', 'inputfieldClass');
+		$f->set('label', $this->_('Which Inputfield to use?'));
+		$f->set('description', $this->_('Returns a FieldsArray when outputformatting is true when false a regular PHP array containing the field ids.'));
+		$f->set('notes', $this->_('Types indicated with an asterisk are for multiple field selection.'));
+		foreach ($selects as $moduleName => $prop) $f->addOption($moduleName, $prop['label']);
+		$f->attr('value', $this->getInputfieldClass($field));
+		$inputfields->add($f);
+
+		$fs = $modules->get('InputfieldFieldset');
+		$fs->set('label', $this->_('Reduce the amount of selectable fields.'));
+
+		$f = $modules->get('InputfieldAsmSelect');
+		$f->attr('name', 'filterFields');
+		$f->set('label', $this->_('Only selected fields'));
+		$f->set('description', $this->_('Return only the selected fields'));
+		foreach ($this->wire('fields')->getAll() as $o) $f->addOption($o->id, $o->get('label|name'));
+		$f->attr('value', $field->get('filterFields'));
+		$fs->add($f);
+
+		$f = $modules->get('InputfieldAsmSelect');
+		$f->attr('name', 'filterTemplates');
+		$f->set('columnWidth', 50);
+		$f->set('label', $this->_('Filter by template'));
+		$f->set('description', $this->_('Return only fields for selected template(s).'));
+		foreach ($this->wire('templates') as $template) $f->addOption($template->id, $template->get('label|name'));
+		$f->attr('value', $field->get('filterTemplates'));
+		$fs->add($f);
+
+		$f = $modules->get('InputfieldAsmSelect');
+		$f->attr('name', 'filterTypes');
+		$f->set('columnWidth', 50);
+		$f->set('label', $this->_('Filter by type'));
+		$f->set('description', $this->_('Return only fields for selected fieldtypes.'));
+		foreach ($this->getFieldTypes() as $type) $f->addOption($type, $type);
+		$f->attr('value', $field->get('filterTypes'));
+		$fs->add($f);
+
+		$f = $modules->get('InputfieldCheckbox');
+		$f->attr('name', 'filterFieldsets');
+		$f->set('columnWidth', 50);
+		$f->set('label', $this->_('Remove fieldset fields'));
+		$f->set('label2', $this->_('Reduce fields'));
+		$f->attr('value', $field->get('filterFieldsets'));
+		$f->attr('checked', $field->get('filterFieldsets'));
+		$fs->add($f);
+
+		$f = $modules->get('InputfieldCheckbox');
+		$f->attr('name', 'filterPage');
+		$f->set('columnWidth', 50);
+		$f->set('label', $this->_('Only fields from page'));
+		$f->set('label2', $this->_('Reduce fields'));
+		$f->attr('value', $field->get('filterPage'));
+		$f->attr('checked', $field->get('filterPage'));
+		$fs->add($f);
+
+		$f = $modules->get('InputfieldTextarea');
+		$f->attr('name', 'filterText');
+		$f->set('label', $this->_('Reduce on text.'));
+		$f->set('description', $this->_('Allow only field names containing text.'));
+		$f->set('notes', $this->_('Each text filter on it\'s own line.'));
+		$f->attr('value', $field->get('filterText'));
+		$fs->add($f);
+
+		$fs->add($f);
+		$inputfields->add($fs);
+
+		return $inputfields;
+	}
+}
+
