@@ -205,6 +205,7 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 	public function getInputfield(Page $page, Field $field) {
 		// Filtered fields
 		$fields = $this->getFields($page, $field);
+		if ($field->sortFields) $fields->sort($field->sortFields);
 
 		$inputfield = $this->wire('modules')->get($this->getInputfieldClass($field));
 		$inputfield->attr('name', $field->name);
@@ -354,8 +355,15 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 		$f->attr('value', $field->get('filterText'));
 		$fs->add($f);
 
-		$fs->add($f);
 		$inputfields->add($fs);
+
+		$f = $modules->get('InputfieldSelect');
+		$f->attr('name', 'sortFields');
+		$f->set('columnWidth', 50);
+		$f->set('label', $this->_('Sort options in Inputfield'));
+		foreach (array('', 'type', 'name', 'label') as $sort) $f->addOption($sort, $sort);
+		$f->attr('value', $field->get('sortFields'));
+		$inputfields->add($f);
 
 		return $inputfields;
 	}
