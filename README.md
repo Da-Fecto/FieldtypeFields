@@ -21,6 +21,10 @@ You can save a FieldsArray or a regular PHP array containing the field ids.
 - Arjen Blokzijl
 - [Calago.nl](http://calago.nl)
 
+### Requires
+
+ProcessWire >= 3.0.39
+
 ### Support
 
 - Nope, use on your own risk.
