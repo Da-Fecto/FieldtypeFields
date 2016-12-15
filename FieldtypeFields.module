@@ -131,7 +131,6 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 		return $cleanValue;
 	}
 
-
 	/**
 	 * Get the Inputfield that provides input for this Fieldtype
 	 *
@@ -141,7 +140,6 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 	 *
 	 */
 	private function getFields(Page $page, Field $field) {
-
 		$fields = $this->wire(new FieldsArray());
 		if ($field->filterPage) $fieldsFromPage = $page->template->fields;
 
@@ -288,7 +286,6 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 	 *
 	 */
 	public function ___getConfigInputfields(Field $field) {
-
 		$modules = $this->wire('modules');
 		$inputfields = parent::___getConfigInputfields($field);
 		$selects = $this->getInputfieldSelects();
