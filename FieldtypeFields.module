@@ -25,7 +25,7 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 			'title' => __('Select Fields', __FILE__),
 			'summary' => __('Field storing field references.', __FILE__),
 			'version' => 1,
-			'author' => 'Martijn Geerts (calago)',
+			'author' => 'Martijn Geerts',
 			'icon' => 'cube',
 			'requiresVersions' => array(
 				'ProcessWire' => array('>=', '3.0.39'),
