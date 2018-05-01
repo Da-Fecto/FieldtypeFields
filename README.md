@@ -19,7 +19,6 @@ You can save a FieldsArray or a regular PHP array containing the field ids.
 ### Thanks
 
 - Arjen Blokzijl
-- [Calago.nl](http://calago.nl)
 
 ### Requires
 
