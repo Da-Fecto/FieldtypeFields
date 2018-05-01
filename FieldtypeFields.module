@@ -24,7 +24,7 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 		return array(
 			'title' => __('Select Fields', __FILE__),
 			'summary' => __('Field storing field references.', __FILE__),
-			'version' => 1,
+			'version' => '0.0.2',
 			'author' => 'Martijn Geerts',
 			'icon' => 'cube',
 			'requiresVersions' => array(
@@ -144,7 +144,7 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 		if ($field->filterPage) $fieldsFromPage = $page->template->fields;
 
 		// Get per selected template
-		if (count($field->filterTemplates)) {
+		if (is_array($field->filterTypes) && count($field->filterTemplates)) {
 			foreach ($field->filterTemplates as $id) {
 				$fields->import($this->wire('templates')->get($id)->fields);
 			}
@@ -155,8 +155,9 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 		}
 
 		foreach ($fields as $f) {
+
 			// Reduce on type
-			if (count($field->filterTypes) && !in_array($f->type->className(), $field->filterTypes)) {
+			if (is_array($field->filterTypes) && count($field->filterTypes) && !in_array($f->type->className(), $field->filterTypes)) {
 				$fields->remove($f->id);
 			}
 
@@ -368,4 +369,3 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 		return $inputfields;
 	}
 }
-
