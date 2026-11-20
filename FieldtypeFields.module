@@ -144,14 +144,18 @@ class FieldtypeFields extends FieldtypeMulti implements Module {
 		if ($field->filterPage) $fieldsFromPage = $page->template->fields;
 
 		// Get per selected template
-		if (is_array($field->filterTypes) && count($field->filterTemplates)) {
+		if (is_array($field->filterTemplates) && count($field->filterTemplates)) {
 			foreach ($field->filterTemplates as $id) {
-				$fields->import($this->wire('templates')->get($id)->fields);
+				$template = $this->wire('templates')->get($id);
+				if ($template) $fields->import($template->fields);
 			}
 		}
 
+		// Import into the copy: getAll() is the live list of fields, and the filters
+		// below remove from $fields, which would remove those fields from the site
+		// for the rest of the request
 		if (0 === $fields->count()) {
-			$fields = $this->wire('fields')->getAll();
+			$fields->import($this->wire('fields')->getAll());
 		}
 
 		foreach ($fields as $f) {
